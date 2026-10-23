@@ -262,12 +262,16 @@ def test_healthy_combined_api_exposes_idle_stalled_and_stopped_processing(  # no
                 assert _value(stalled, "artifact_processing_oldest_observed_pending_age_seconds", family="memory") >= 0
 
             async def fail_observation():
+                failures_before = supervisor.family_status["memory"]["pending_observation_failures"]
                 intents.fail_observation = True
                 async with asyncio.timeout(3):
-                    while supervisor.family_status["memory"]["pending_observation_failures"] == 0:  # noqa: ASYNC110
+                    while (  # noqa: ASYNC110
+                        supervisor.family_status["memory"]["pending_observation_failures"] == failures_before
+                    ):
                         await asyncio.sleep(0.01)
                     # A successful read already in flight when the flag changed
-                    # may publish first. After one failure, the cache is stable.
+                    # may publish first. Wait for a new failure after injection;
+                    # earlier transient timeouts do not establish cache stability.
                     previous = supervisor.family_status["memory"]
                     while (  # noqa: ASYNC110
                         supervisor.family_status["memory"]["pending_observation_failures"]
